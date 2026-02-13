@@ -1,0 +1,13 @@
+0.01  2026-02-12
+    - Async queries via MariaDB non-blocking API
+    - Query pipelining via mysql_send_query/mysql_read_query_result
+    - Prepared statements (prepare, execute, close_stmt, stmt_reset)
+    - Connection reset, reset_connection, ping, select_db, change_user
+    - Connection options (timeouts, compression, charset, SSL, multi_statements)
+    - Accessors: insert_id, warning_count, info, error_number, sqlstate
+    - Multi-result set drain for multi-statement queries
+    - Escape functions
+    - Short method aliases (q, prep, reconnect, disconnect, errstr, errno)
+    - Fix: pipeline state preserved across callback-initiated operations
+    - Fix: prepared stmt buffer sizing with truncation refetch
+    - Fix: cb_queue cleanup during global destruction

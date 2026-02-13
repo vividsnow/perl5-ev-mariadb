@@ -1,0 +1,149 @@
+name: test
+on: [push, pull_request]
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mariadb-server libmariadb-dev cpanminus
+
+      - name: Configure MariaDB
+        run: |
+          sudo systemctl start mariadb
+          sudo mariadb <<'SQL'
+            create database if not exists test;
+            create user if not exists 'testuser'@'%' identified by 'testpass';
+            grant all on test.* to 'testuser'@'%';
+            create user if not exists 'testuser'@'localhost' identified by 'testpass';
+            grant all on test.* to 'testuser'@'localhost';
+            flush privileges;
+          SQL
+
+      - name: Install Perl dependencies
+        run: sudo cpanm -nq EV
+
+      - name: Build
+        run: perl Makefile.PL && make
+
+      - name: Test
+        env:
+          TEST_MARIADB_HOST: 127.0.0.1
+          TEST_MARIADB_USER: testuser
+          TEST_MARIADB_PASS: testpass
+          TEST_MARIADB_DB: test
+        run: make test
+
+  debian:
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y mariadb-server libmariadb-dev perl cpanminus make gcc
+
+      - name: Start and configure MariaDB
+        run: |
+          install -d -o mysql -g mysql /run/mysqld
+          mariadbd-safe &
+          for i in $(seq 1 30); do mariadb -e "select 1" 2>/dev/null && break || sleep 1; done
+          mariadb <<'SQL'
+            create database if not exists test;
+            create user if not exists 'testuser'@'%' identified by 'testpass';
+            grant all on test.* to 'testuser'@'%';
+            create user if not exists 'testuser'@'localhost' identified by 'testpass';
+            grant all on test.* to 'testuser'@'localhost';
+            flush privileges;
+          SQL
+
+      - name: Install Perl dependencies
+        run: cpanm -nq EV
+
+      - name: Build
+        run: perl Makefile.PL && make
+
+      - name: Test
+        env:
+          TEST_MARIADB_HOST: 127.0.0.1
+          TEST_MARIADB_USER: testuser
+          TEST_MARIADB_PASS: testpass
+          TEST_MARIADB_DB: test
+        run: make test
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MariaDB
+        run: |
+          brew install mariadb
+          brew services start mariadb
+          sleep 5
+
+      - name: Configure MariaDB
+        run: |
+          export PATH="$(brew --prefix mariadb)/bin:$PATH"
+          mariadb <<'SQL'
+            create database if not exists test;
+            create user if not exists 'testuser'@'%' identified by 'testpass';
+            grant all on test.* to 'testuser'@'%';
+            create user if not exists 'testuser'@'localhost' identified by 'testpass';
+            grant all on test.* to 'testuser'@'localhost';
+            flush privileges;
+          SQL
+
+      - name: Install Perl dependencies
+        run: curl -L https://cpanmin.us | sudo perl - -nq EV
+
+      - name: Build
+        run: |
+          export PATH="$(brew --prefix mariadb)/bin:$PATH"
+          perl Makefile.PL && make
+
+      - name: Test
+        env:
+          TEST_MARIADB_HOST: 127.0.0.1
+          TEST_MARIADB_USER: testuser
+          TEST_MARIADB_PASS: testpass
+          TEST_MARIADB_DB: test
+        run: |
+          export PATH="$(brew --prefix mariadb)/bin:$PATH"
+          make test
+
+  freebsd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test on FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg install -y mariadb114-server mariadb114-client p5-EV
+          run: |
+            sysrc mysql_enable=YES
+            service mysql-server start
+            for i in $(seq 1 30); do mysql -u root -e "select 1" 2>/dev/null && break || sleep 1; done
+            mysql -u root <<'SQL'
+              create database if not exists test;
+              create user if not exists 'testuser'@'%' identified by 'testpass';
+              grant all on test.* to 'testuser'@'%';
+              create user if not exists 'testuser'@'localhost' identified by 'testpass';
+              grant all on test.* to 'testuser'@'localhost';
+              flush privileges;
+            SQL
+
+            perl Makefile.PL && make && \
+              TEST_MARIADB_HOST=127.0.0.1 \
+              TEST_MARIADB_USER=testuser \
+              TEST_MARIADB_PASS=testpass \
+              TEST_MARIADB_DB=test \
+              make test
