@@ -209,6 +209,52 @@ printf "N = %d\n\n", $N;
     EV::run;
 }
 
+# 9) EV::Future — parallel sequential (series of N queries)
+eval {
+    require EV::Future;
+    {
+        my $t0 = time;
+        my @tasks;
+        for my $i (1..$N) {
+            push @tasks, sub {
+                my $done = shift;
+                $m->q("select 1", sub { $done->() });
+            };
+        }
+        EV::Future::series(\@tasks, sub {
+            printf "%-36s %s\n", "EV::Future series:", fmt($N, time - $t0);
+            EV::break;
+        });
+        EV::timer(120, 0, sub { die "timeout\n" });
+        EV::run;
+    }
+
+    # 10) EV::Future — parallel_limit (N queries, limited concurrency)
+    {
+        my $LIMIT = $ENV{BENCH_BATCH} || 10;
+        my $t0 = time;
+        my @tasks;
+        for my $i (1..$N) {
+            push @tasks, sub {
+                my $done = shift;
+                $m->q("select 1", sub { $done->() });
+            };
+        }
+        EV::Future::parallel_limit(\@tasks, $LIMIT, sub {
+            printf "%-36s %s\n",
+                "EV::Future parallel_limit($LIMIT):", fmt($N, time - $t0);
+            EV::break;
+        });
+        EV::timer(120, 0, sub { die "timeout\n" });
+        EV::run;
+    }
+};
+if ($@ && $@ =~ /Can't locate/) {
+    printf "EV::Future not available, skipping\n";
+} elsif ($@) {
+    die $@;
+}
+
 $m->finish;
 $dbh->disconnect;
 printf "\ndone.\n";

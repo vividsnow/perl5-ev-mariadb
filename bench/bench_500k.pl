@@ -47,7 +47,7 @@ sub run_sequential {
                 EV::break;
                 return;
             }
-            $run->();
+            my $idle; $idle = EV::idle(sub { undef $idle; $run->() });
         });
     };
     $run->();
@@ -98,7 +98,7 @@ sub run_prepared_sequential {
                     $m->close_stmt($stmt, sub { EV::break });
                     return;
                 }
-                $run->();
+                my $idle; $idle = EV::idle(sub { undef $idle; $run->() });
             });
         };
         $run->();

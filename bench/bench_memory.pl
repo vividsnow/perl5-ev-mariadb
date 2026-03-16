@@ -51,7 +51,7 @@ printf "server: %s, libmariadb: %s\n", $m->server_info, EV::MariaDB->lib_info;
 printf "DBD::MariaDB %s, DBI %s\n", $DBD::MariaDB::VERSION, $DBI::VERSION;
 printf "N = %d, pipeline batch = %d, engine = memory (no disk I/O)\n\n", $N, $BATCH;
 
-# --- helpers ---
+# --- helpers (trampoline via EV::idle to avoid deep recursion on sync completion) ---
 
 sub ev_sequential {
     my ($label, $gen_sql) = @_;
@@ -65,7 +65,7 @@ sub ev_sequential {
                 EV::break;
                 return;
             }
-            $run->();
+            my $idle; $idle = EV::idle(sub { undef $idle; $run->() });
         });
     };
     $run->();
@@ -114,7 +114,7 @@ sub ev_prepared {
                     $m->close_stmt($stmt, sub { EV::break });
                     return;
                 }
-                $run->();
+                my $idle; $idle = EV::idle(sub { undef $idle; $run->() });
             });
         };
         $run->();

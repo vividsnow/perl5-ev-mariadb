@@ -77,6 +77,44 @@ jobs:
           TEST_MARIADB_DB: test
         run: make test
 
+  alpine:
+    runs-on: ubuntu-latest
+    container: alpine:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: apk add --no-cache mariadb mariadb-client mariadb-dev perl perl-dev perl-app-cpanminus make gcc musl-dev wget
+
+      - name: Start and configure MariaDB
+        run: |
+          install -d -o mysql -g mysql /run/mysqld
+          mariadb-install-db --user=mysql --datadir=/var/lib/mysql
+          mariadbd-safe --datadir=/var/lib/mysql &
+          for i in $(seq 1 30); do mariadb -e "select 1" 2>/dev/null && break || sleep 1; done
+          mariadb <<'SQL'
+            create database if not exists test;
+            create user if not exists 'testuser'@'%' identified by 'testpass';
+            grant all on test.* to 'testuser'@'%';
+            create user if not exists 'testuser'@'localhost' identified by 'testpass';
+            grant all on test.* to 'testuser'@'localhost';
+            flush privileges;
+          SQL
+
+      - name: Install Perl dependencies
+        run: cpanm -nq EV Alien::Build Alien::MariaDB
+
+      - name: Build
+        run: perl Makefile.PL && make
+
+      - name: Test
+        env:
+          TEST_MARIADB_HOST: 127.0.0.1
+          TEST_MARIADB_USER: testuser
+          TEST_MARIADB_PASS: testpass
+          TEST_MARIADB_DB: test
+        run: make test
+
   macos:
     runs-on: macos-latest
     steps:
