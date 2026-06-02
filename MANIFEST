@@ -32,4 +32,5 @@ t/11_coverage_gaps.t
 t/12_coverage_final.t
 t/13_extra_coverage.t
 t/14_new_features.t
+t/15_review_gaps.t
 typemap
